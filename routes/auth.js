@@ -2,17 +2,31 @@ import { Router } from 'express';
 import fetch from 'node-fetch'; 
 import User from '../schema/user.js';
 import cookieParser from 'cookie-parser';
-import { createClient } from 'redis';
+//import { createClient } from 'redis';
 import CryptoJS from 'crypto-js';
 import jwt from 'jsonwebtoken';
 import dotenv from 'dotenv';
 import { randomBytes } from 'crypto'; // Import the randomBytes function from the crypto module
 import { verifyToken, verifyTokenAndAuthorization, verifyTokenAndAdmin } from "../routes/verifytoken.js";
+import mongoose from 'mongoose';
+
+
+const Schema = mongoose.Schema;
+
+// Define OTP schema
+const otpSchema = new Schema({
+    mobile: { type: String, required: true },
+    otp: { type: Number, required: true },
+    createdAt: { type: Date, default: Date.now, expires: 300 } // OTP expires in 5 minutes (300 seconds)
+});
+
+// Create OTP model
+const OTP = mongoose.model('OTP', otpSchema);
 
 const router = Router();
 router.use(cookieParser());
 
-const redisClient = createClient({
+/*const redisClient = createClient({
     password: 'iAO7so9FFv6n9jfkjejiNtyk8lKih6pf',
     socket: {
         host: 'redis-14161.c212.ap-south-1-1.ec2.redns.redis-cloud.com',
@@ -20,51 +34,25 @@ const redisClient = createClient({
     }
   });
   
-  redisClient.on('error', (err) => console.log('Redis Client Error', err));
+  redisClient.on('error', (err) => console.log('Redis Client Error', err));*/
   
   const authkey = '410073AGplspgCU45M6650a047P1';
   const template_id='658567f8d6fc0537e4466bd1';
-            
-
-/*router.post('/signup',async(req,res)=>
-    {
-        try {
-
-            const newUser= await User.create({
-                username:req.body.username,
-                email: req.body.email,
-                phone: req.body.phone,
-                Work_location: req.body.Work_location,
-                state:req.body.state,
-                password: CryptoJS.AES.encrypt(req.body.password,"hgiufhrwoijcjvj").toString(),
-
-            });
-           
-            res.status(200).json(newUser)
-
-        } catch (error) {
-            console.log(error.message)
-            res.status(500).json({message: error.message})
-            
-        }
-        
-    }
-)*/
 
   
 router.post('/signup/sendotp', async (req, res) => {
     try {
       const mobile = req.body.mobile;
       const url = 'https://control.msg91.com/api/v5/flow';
-      await redisClient.connect(); //connect to redis
+      //await redisClient.connect(); //connect to redis
      
       const buffer = randomBytes(2); // Step 1: Generate 2 random bytes
       const number = buffer.readUInt16BE(0) % 10000; // Step 2: Convert these bytes to a 4-digit number
       const otp=number.toString().padStart(4, '0'); // Step 3: Ensure the OTP is always 4 digits long
   
-      const otpKey = `otp:${mobile}`;
+      //const otpKey = `otp:${mobile}`;
     
-        try {
+        /*try {
           await redisClient.setEx(otpKey, 300, otp); // Store OTP in Redis with 5 minutes expiry
     
           console.log(`OTP for ${mobile}: ${otp}`); // Replace with actual OTP sending logic
@@ -73,7 +61,14 @@ router.post('/signup/sendotp', async (req, res) => {
         } catch (err) {
           console.log('Error setting OTP in Redis:', err);
           res.status(500).json({ error: 'Error sending OTP' });
-        }
+        }*/
+
+      const newOTP= await OTP.create({
+          mobile: req.body.mobile,
+          otp: otp
+      });
+  
+      //await otpObject.save();
   
       //console.log(otp);
   
@@ -115,17 +110,16 @@ router.post('/signup/sendotp', async (req, res) => {
         return res.status(400).json({ error: 'Mobile number and OTP are required' });
       }
   
-      const otpKey = `otp:${mobile}`;
+      //const otpKey = `otp:${mobile}`;
   
       try {
-        const storedOtp = await redisClient.get(otpKey);
-  
-        if (storedOtp === otp) 
-          {await redisClient.del(otpKey);
-           //res.status(200).json({message: 'OTP verified successfully'});
-           try {
+        const otpObject = await OTP.findOne({ mobile:req.body.mobile });
+        const otp0=otpObject.otp;
 
-            const newUser= await User.create({
+        if (otp0 == otp) {
+        // OTP matched, delete from database (for one-time use)
+          await OTP.deleteOne({ _id: otpObject._id });
+          const newUser= await User.create({
                 username:req.body.username,
                 email: req.body.email,
                 phone: req.body.mobile,
@@ -137,20 +131,16 @@ router.post('/signup/sendotp', async (req, res) => {
            
             res.status(200).json({message:"OTP successfully verified",newUser})
 
+        }
+        else {
+          return res.status(400).json({ error: 'Invalid OTP' });
+        }
         } catch (error) {
             console.log(error.message)
             res.status(500).json({message: error.message})
-            
-        }
+          }
           
-        } else {
-          return res.status(400).json({ error: 'Invalid OTP' });
-        }
-      } catch (err) {
-        console.log('Error verifying OTP in Redis:', err);
-        res.status(500).json({ error: 'Error verifying OTP' });
-      }
-    })
+        })
 
 router.post('/login/password',async(req,res)=>
     {
@@ -201,15 +191,22 @@ router.post('/login/password',async(req,res)=>
     try {
       const mobile = req.body.mobile;
       const url = 'https://control.msg91.com/api/v5/flow';
-      await redisClient.connect(); //connect to redis
+      //await redisClient.connect(); //connect to redis
      
       const buffer = randomBytes(2); // Step 1: Generate 2 random bytes
       const number = buffer.readUInt16BE(0) % 10000; // Step 2: Convert these bytes to a 4-digit number
       const otp=number.toString().padStart(4, '0'); // Step 3: Ensure the OTP is always 4 digits long
   
       const otpKey = `otp:${mobile}`;
+
+      const newOTP= await OTP.create({
+        mobile: req.body.mobile,
+        otp: otp
+      });
+
+      console.log(newOTP);
     
-        try {
+        /*try {
           await redisClient.setEx(otpKey, 300, otp); // Store OTP in Redis with 5 minutes expiry
     
           console.log(`OTP for ${mobile}: ${otp}`); // Replace with actual OTP sending logic
@@ -218,7 +215,7 @@ router.post('/login/password',async(req,res)=>
         } catch (err) {
           console.log('Error setting OTP in Redis:', err);
           res.status(500).json({ error: 'Error sending OTP' });
-        }
+        }*/
   
       //console.log(otp);
   
@@ -245,7 +242,7 @@ router.post('/login/password',async(req,res)=>
       const Data = await response.json();
       res.json(Data);
     } catch (error) {
-      console.log("Error fetching weather data:", error);
+      console.log("Error fetching data:", error);
       res.status(500).json({ error: 'Error' });
     }
   });
@@ -255,6 +252,8 @@ router.post('/login/password',async(req,res)=>
   router.post('/login/verifyotp', async (req, res) => {
       const mobile=req.body.mobile;
       const otp=req.body.otp;
+
+      console.log(mobile,otp);
   
       const user= await User.findOne({phone: req.body.mobile});
   
@@ -263,13 +262,16 @@ router.post('/login/password',async(req,res)=>
         return res.status(400).json({ error: 'Mobile number and OTP are required' });
       }
   
-      const otpKey = `otp:${mobile}`;
+      //const otpKey = `otp:${mobile}`;
   
       try {
-        const storedOtp = await redisClient.get(otpKey);
-  
-        if (storedOtp === otp) 
-          {await redisClient.del(otpKey); // Clear OTP after successful verification
+        const otpObject = await OTP.findOne({ mobile:req.body.mobile });
+        const otp0=otpObject.otp;
+        console.log(otp0);
+
+        if (otp0 ==otp) {
+        // OTP matched, delete from database (for one-time use)
+          await OTP.deleteOne({ _id: otpObject._id }); // Clear OTP after successful verification
            const accessToken = jwt.sign({
               id:user._id,//payloads 
               isAdmin:user.isAdmin,//payload
@@ -299,7 +301,7 @@ router.post('/login/password',async(req,res)=>
           return res.status(400).json({ error: 'Invalid OTP' });
         }
       } catch (err) {
-        console.log('Error verifying OTP in Redis:', err);
+        console.log('Error verifying OTP', err);
         res.status(500).json({ error: 'Error verifying OTP' });
       }
     })

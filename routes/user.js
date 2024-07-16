@@ -1,8 +1,13 @@
 //const express=require('express');
 import { Router } from 'express';
+import fs from 'fs';
+import { createReadStream } from "fs";
+import path from 'path';
+import { fileFromSync } from "fetch-blob/from.js";
 import bodyParser from 'body-parser';
 import CryptoJS from 'crypto-js';
 import multer from 'multer';
+import FormData from 'form-data';
 import User from '../schema/user.js';
 import { verifyToken, verifyTokenAndAuthorization, verifyTokenAndAdmin } from "../routes/verifytoken.js";
 import { spawn } from 'child_process';
@@ -48,6 +53,55 @@ router.post('/upload',verifyToken,upload.single('file'), async (req, res) => {
       res.send(mlOutput);
     });
   })
+
+  router.post('/uploadpic',verifyToken,upload.single('file'), async (req, res) => {
+        try {
+       
+        const file=req.file;
+        if(!file)
+        {console.log("File  not uploaded");}
+        else
+        {console.log("File uploaded");}
+        const filePath = "./uploads/"+req.file.filename;
+       // console.log(req.file.mimetype+" "+req.file.originalname);
+        // Create FormData object
+        
+        
+        
+       /* const formData = new FormData();
+        const abc=formData.append('file', fs.createReadStream(filePath));*/
+
+      const file1 = fileFromSync(filePath); // this will only stat the file for getting the file size
+	  
+	  const formData = new FormData();
+	  formData.append("file", fs.createReadStream(filePath));
+	  //formData.append("modelId", this.modelId);
+        
+        
+
+        //console.log( fs.createReadStream(filePath));
+        //console.log("form data created is.."+abc);
+
+        // Send POST request to the API
+        const response = await fetch('http://68.183.85.81/api/predict', {
+            method: 'POST',
+            body:formData,
+        });
+
+        // Handle API response
+        
+
+        const result = await response.json();
+        console.log('Prediction result:', result);
+
+        // Send the prediction result back to the client
+        res.json(result);
+    } catch (error) {
+        console.error('Error uploading file:', error.message);
+        res.status(500).send('Error uploading file');
+    }
+})
+    
 
 router.put("/:id",verifyTokenAndAuthorization, async (req,res)=>
     { if(req.body.password)

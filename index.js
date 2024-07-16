@@ -14,7 +14,7 @@ dotenv.config();
 import cors from 'cors';
 app.use(cors());
 try {
-    mongoose.connect("mongodb+srv://Root:kgILypQu5AvRe3Ng@cluster0.acvn3t4.mongodb.net/SoilProfiling?retryWrites=true&w=majority&appName=Cluster0").then(()=>console.log("mongoDB connected"));
+    mongoose.connect("mongodb+srv://Root:kgILypQu5AvRe3Ng@cluster0.acvn3t4.mongodb.net/SoilProfiling?retryWrites=true&w=majority&appName=Cluster0").then(()=>console.log("mongoDB general space connected"));
 } catch (error) {
     console.log(error);
 }
@@ -31,4 +31,4 @@ app.use('/polygon',polygonRoute);
 
 
 
-app.listen(5000,()=>{console.log("Listening on port 5000")});
+app.listen(3000,()=>{console.log("Listening on port 3000")});
